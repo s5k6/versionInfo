@@ -13,7 +13,7 @@ description: This is an experimental approach to include versioning
              information into compiled binary.
 license: GPL-3.0-or-later
 
-extra-source-files:  README.md, githash
+extra-source-files:  README.md, gitinfo
 
 source-repository head
   type: git
@@ -43,6 +43,7 @@ executable versionInfo
                        -Wwarn=missing-export-lists
                        -Wwarn=unused-top-binds
                        -Werror=unused-imports
+                      -- -ddump-splices -ddump-to-file
 
   build-depends: rio               >= 0.1.20 && < 0.2
                , base              >= 4.14.2 && < 4.15
