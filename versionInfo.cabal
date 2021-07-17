@@ -1,0 +1,51 @@
+cabal-version:       2.4
+-- For further documentation, see http://haskell.org/cabal/users-guide/
+
+name:                versionInfo
+version:             0.0.4
+author:              Stefan Klinger
+maintainer:          git@stefan-klinger.de
+
+category: experimantal
+synopsis: Version information in compiled binary
+
+description: This is an experimental approach to include versioning
+             information into compiled binary.
+license: GPL-3.0-or-later
+
+extra-source-files:  README.md, githash
+
+source-repository head
+  type: git
+  location: foobar.example.com
+
+custom-setup
+  setup-depends: base       >= 4.14.2 && < 4.15
+               , Cabal      >= 3.2   && < 3.3
+               , directory  >= 1.3.6 && < 1.4
+               , process    >= 1.6.9 && < 1.7
+
+
+executable versionInfo
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , BangPatterns
+                     , ScopedTypeVariables
+                     , OverloadedStrings
+  autogen-modules: Paths_versionInfo
+
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  other-modules:       Compiletime.Templates, Compiletime.Info, Paths_versionInfo
+
+  ghc-options:         -Wall
+                       -Wwarn=missing-local-signatures
+                       -Wwarn=missing-export-lists
+                       -Wwarn=unused-top-binds
+                       -Werror=unused-imports
+
+  build-depends: rio               >= 0.1.20 && < 0.2
+               , base              >= 4.14.2 && < 4.15
+               , text              >= 1.2.4 && < 1.3
+               , time              >= 1.9.3 && < 1.10
+               , template-haskell  >= 2.16.0 && < 2.17
