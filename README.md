@@ -3,6 +3,10 @@ title: Print version information in Haskell programs
 author: Stefan Klinger <https://stefan-klinger.de/>
 ---
 
+**Note: This is much more general than only git hashes and version
+information**, they are just one use case.
+
+
 The task
 ========
 
@@ -11,12 +15,9 @@ The compiled binary must provide the following information:
   * The version number it was assigned in the cabal file.
 
   * The git hash that represents the latest commit before compilation,
-    including “dirtiness”.  Maybe add the commit's date in the future.
+    including “dirtiness”.  Also, its date.
 
-  * The time the binary was compiled.
-
-Collect the interface to this information in a common module
-[`Compiletime.Info`][1].
+  * The time and date the binary was compiled.
 
 
 The struggle
@@ -51,132 +52,123 @@ But the `Paths_…` module thwarts that plan
     import Prelude
 
 and that is code compiled into the resulting binary.  I can live with
-it, but it's not extra cool, is it?
+it, but it's not extra cool, or is it?
 
 
 The git hash, oh my
 -------------------
 
-Wait, there's a package for it: [gitrev][5] — but that just [don't cut
-the mustard][6].
+Wait, there's a package for that: [gitrev][5] — but that just [don't
+cut the mustard][6].
 
 Obviously, if the git repository is not available at compile time,
 then there's a problem.  This is a legit scenario though, I might want
 to publish the source without revealing my history of fallacies and
 transgressions.
 
-Basicaly, asking for a git hash introduces a dependency on the SCM,
-which is not nice to have, but a burden.  And consequently, Cabal
-makes this problem obvious when *installing* a program that uses
-[gitrev][6]: The build happens in a temporary directory (not
-containing the `.git` subdirectory that was available during
-*building*), and thus reaching out to `git` fails.  gitrev just puts
-`UNKNOWN` where the hash should be.
+Asking for a git hash introduces a dependency on the SCM.  And
+consequently, Cabal makes this problem obvious when *installing* a
+program that uses [gitrev][6]: The build happens in a temporary
+directory (not containing the `.git` subdirectory that was available
+during *building*), and thus reaching out to `git` fails.  gitrev just
+puts `UNKNOWN` where the hash should be.
 
 But still, I think it is legit to ask what commit a binary (or source
-distribution) was created from.
+distribution) was created from.  Anyways, the customer asks for it!
 
-I've resorted to creating a `gitinfo` file to convey the hash into the
-source distribution file used for `cabal install` and also for
-shipping.
+Ultimately, after much transgression, I've resorted to auto-generating
+a module [`Generated.Early`][7] to convey the hash into the source
+distribution used for `cabal install` and also for shipping.
 
-Using this file is easy, see [Compiletime.Templates][7], and
-[Compiletime.Info][8].  But its creation is ugly, [`Setup.hs`][9]
-always tries to write a new `gitinfo` file, or fails silently.
+This revealed the following insight:
 
 
-Conclusion
-==========
+The Insight
+===========
 
-Conceptually, I see two phases at work here.  The first is the step
-from the cloned git repository to the source distribution directory,
-and the second is the actual compilation.
+I see two phases at work here.  The first is the step from the cloned
+git repository to the source distribution, and the second is the
+actual compilation.
 
-Taking a more general perspective, there are two sorts of generated
-files:
+Hence, there can be two sorts of generated files:
 
- 1. Files not present in your source *repository*, that have to be
-    present in a source *distribution*.
+ 1. I'll call **early generated** the files that are *not* stored in
+    your source *repository*, but have to be present in a source
+    *distribution*.
 
-    The information in the `gitinfo` file would fall in that category,
-    but also any modules or data used by the product, which I want to
-    ship to the customer without shipping its means of creation, be it
-    out of embarassment, practicality or legal necessity.
+    The information about the current git hash would fall in that
+    category, but also any modules or data used by the product, that
+    should be shipped to the customer without shipping its means of
+    creation.  Be it out of embarassment, practicality or legal
+    necessity.
 
-    Call these files **early generated**, because they have to be
-    generated before `cabal sdist`.
-
- 2. Files that can be created during comiplation, from information in
-    the source distribution alone.
+ 2. I'll call **late generated** the files that are *not* in the source
+    *distribution*, but created during compilation
 
     This category is the “classical” compile-time generated stuff,
-    e.g. compilation time, but also the `Paths_…` module, and other
+    e.g. date of compilation, but also the `Paths_…` module, and other
     precomputed data used by the product whose computation cannot be
     done at source distribution.
-
-    Call these files **late generated**, because they can be generated
-    after `cabal sdist`.
 
 Obviously, there may be generated files that would fit into either
 category, trading source distribution size for compile time duration.
 
 From this perspective, the generation of `Paths_…` is only a special
-case of the *late generated* files.  Left to the developer (i.e., not
-generated by Cabal), one could avoid the `base` dependency during
+case of the *late generated* files.  Allowing the developer to provide
+a template for `Paths_…`, one could avoid the `base` dependency during
 compilation.
 
 I do not see Cabal's [user interface][11] providing a clear line
-between these two phases.  It is probably there, somewhere, but I
-can't put my finger on it.  Maybe I just did not find it in the
-documentation.
+between these two sorts of auto-generated code.  It might be there,
+somewhere, but I can't put my finger on it.  Maybe I just did not find
+it in the documentation.
 
 
 Currently remaining pain
 ------------------------
 
-  * Now there's another file lying around.  What's the right place and
-    name to put it?
+  * Just as there is a [directory][8] where (late) auto-generated code
+    ends up, it would be nice to have such a location for early stuff
+    too.  But I'm entirely unsure what that could be.
 
-  * Current writing and parsing of `gitinfo` is is error prone and
-    introduces a lot of boilerplate code.  This can probably be solved
-    by generating a Haskell source file instead of `gitinfo`.
+  * It is not entirely clear how Cabal could detect a pre-sdist
+    situation.  My best guess is to leave this to the developer of the
+    package, since a [simple test][9] may be sufficient.
 
-  * The package is reported to be broken:
+  * Cabal does not know about early generated code.  Thus, the package
+    is reported to be broken
 
         $ cabal check
         Warning: These warnings may cause trouble when distributing the package:
-        Warning: In 'extra-source-files': the pattern 'gitinfo' does not match any
-        files.
+        Warning: In 'extra-source-files': the pattern 'src/Generated/Early.hs' does
+        not match any files.
 
-    but a `cabal sdist` will fix this.
+    although `cabal build` will fix this.
 
-  * I had to write my own [`Setup.hs`](Setup.hs), with a rather
-    unsatisfying heuristic to always overwrite `./gitinfo` if `.git`
-    was present, and to hope it contained the right value otherwise.
-    A more sane approach would be Cabal providing *early* and *late*
-    generation hooks as outlined above.
+  * I had to write my own [`Setup.hs`](Setup.hs).  A more sane
+    approach would be Cabal providing *early* and *late* generation
+    hooks as outlined above.
 
   * After cloning from git, it is now mandatory to `cabal build`
     before `cabal install`, otherwise
 
-        cabal: filepath wildcard 'gitinfo' does not match any files.
+        cabal: filepath wildcard 'src/Generated/Early.hs' does not match any files.
 
     But installation from a source distribution tarball is fine,
-    because it now contains `gitinfo`.
+    because that will contain `gitinfo`.
 
-  * This approach bears some complexity.
+  * I don't like `Paths_…` pulling in `base`.  If that could be built
+    from a template, the developer might have more control over the
+    dependencies.  Such a templating mechanism would also be useful
+    for early generated code.
 
-  * I don't like `Paths_…` pulling in `base`.
 
-
-[1]: src/Compiletime/Info.hs
-[2]: src/Compiletime/Templates.hs#L7-L11
-[3]: src/Compiletime/Info.hs#L12-L13
-[4]: src/Compiletime/Info.hs#L15-L16
+[2]: src/Generated/Templates.hs#L8-L12
+[3]: src/Generated/Late.hs#L12-L13
+[4]: src/Generated/Late.hs#L15-L16
 [5]: https://www.stackage.org/haddock/lts-18.2/gitrev-1.3.1/Development-GitRev.html
 [6]: https://github.com/acfoltzer/gitrev/issues/23
-[7]: src/Compiletime/Templates.hs#L13-L14
-[8]: src/Compiletime/Info.hs#L18-L19
-[9]: Setup.hs#L12-L29
-[10]: https://hackage.haskell.org/package/Cabal-3.4.0.0/docs/Distribution-Simple.html
+[7]: Setup.hs#L28-L52
+[8]: Setup.hs#L17-L23
+[9]: Setup.hs#L11
 [11]: https://cabal.readthedocs.io/en/3.4/index.html
