@@ -2,7 +2,8 @@
 module Main ( main ) where
 
 import RIO
-import Compiletime.Info as CTI
+import Generated.Early as GE
+import Generated.Late as GL
 
 main :: IO ()
 main = runSimpleApp rioApp
@@ -10,5 +11,5 @@ main = runSimpleApp rioApp
 rioApp :: RIO SimpleApp ()
 rioApp = logInfo
   $
-  "Version " <> CTI.versionText <> " " <> CTI.gitHash <> " " <>
-  CTI.gitDate <> " compiled " <> CTI.dateCompiled
+  "Version " <> GL.versionText <> " " <> GE.gitHash <> " " <>
+  GE.gitDate <> " compiled " <> GL.dateCompiled

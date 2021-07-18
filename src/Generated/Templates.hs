@@ -1,4 +1,4 @@
-module Compiletime.Templates ( dateCompiled, gitinfo ) where
+module Generated.Templates ( dateCompiled, gitinfo ) where
 
 import Prelude
 import Language.Haskell.TH ( Q, Exp, tupE, stringL, stringE, litE, runIO )
@@ -21,7 +21,7 @@ gitinfo = do
   (gitHash :: String, gitDate :: String) <- read <$> runIO (readFile "gitinfo")
 
   {- Note: The expression created below must match the types and structure
-  expected in Compiletime.Info -}
+  expected in Generated.Info -}
 
   tupE [ litE $ stringL gitHash
        , litE $ stringL gitDate

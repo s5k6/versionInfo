@@ -13,7 +13,8 @@ description: This is an experimental approach to include versioning
              information into compiled binary.
 license: GPL-3.0-or-later
 
-extra-source-files:  README.md, gitinfo
+extra-source-files:  README.md
+                   , src/Generated/Early.hs
 
 source-repository head
   type: git
@@ -32,11 +33,12 @@ executable versionInfo
                      , BangPatterns
                      , ScopedTypeVariables
                      , OverloadedStrings
-  autogen-modules: Paths_versionInfo
 
   hs-source-dirs:      src
   main-is:             Main.hs
-  other-modules:       Compiletime.Templates, Compiletime.Info, Paths_versionInfo
+  other-modules:       Generated.Templates, Generated.Late
+                     , Paths_versionInfo, Generated.Early
+  autogen-modules:     Paths_versionInfo, Generated.Early
 
   ghc-options:         -Wall
                        -Wwarn=missing-local-signatures

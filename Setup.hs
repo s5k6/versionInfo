@@ -1,38 +1,55 @@
 import Distribution.Simple ( defaultMain )
-import System.Environment ( getArgs )
 import System.Process ( readProcessWithExitCode )
 import System.Exit ( ExitCode(..), die )
 import System.Directory ( doesDirectoryExist, doesFileExist )
 import Control.Exception ( catch, SomeException )
 
+
 main = do
-  doesDirectoryExist ".git" ?? updateGitinfo $ requireGitinfo
+
+  {- Note: a better question would be:  Are we in a pre-sdist situation? -}
+  preSdist <- doesDirectoryExist ".git"
+  if preSdist then earlyAutogen else pure ()
+
   defaultMain
 
 
-updateGitinfo :: IO ()
-updateGitinfo = do
+{- Note: Having a separate directory to put these would be great.
+Something like
+`Distribution.Simple.BuildPaths.autogenPackageModulesDir`, which is
+available to `UserHooks.buildHook` for *late* auto-generated code. -}
+
+earlyGenFileName :: String
+earlyGenFileName = "src/Generated/Early.hs"
+
+
+{- This is auto generation required before `cabal sdist`. -}
+
+earlyAutogen :: IO ()
+earlyAutogen = do
 
   {- collect information from git -}
   gitHash <- git1 ["describe", "--always", "--dirty=+"]
   gitDate <- git1 ["show", "-s", "--format=%cd", "--date=format:%Y-%m-%d"]
 
-  {- Note: The file written below must match the structure and
-  types expected in Compiletime.Templates.gitinfo -}
+  {- This is as ugly as Distribution.Simple.Build.PathsModule.Z -}
+  writeFile earlyGenFileName $ unlines
+    [ "module Generated.Early ( gitHash, gitDate ) where"
+    , ""
+    , "-- Note: This file is auto-generated before creating a source \
+      \distribution."
+    , ""
+    , "import RIO"
+    , ""
+    , "gitHash :: Utf8Builder"
+    , "gitHash = " ++ show gitHash
+    , ""
+    , "gitDate :: Utf8Builder"
+    , "gitDate = " ++ show gitDate
+    ]
 
-  writeFile "gitinfo" $ show (gitHash, gitDate) ++ "\n"
-
-
-requireGitinfo :: IO ()
-requireGitinfo = do
-  doesFileExist "gitinfo" ?? return () $ die "Missing file: gitinfo"
-
-
-{- Run git, return first line with trailing newline stripped -}
-
-git1 :: [String] -> IO String
-git1 args = takeWhile (/= '\n') <$> run "git" args
-
+  where
+    git1 args = takeWhile (/= '\n') <$> run "git" args
 
 
 {- Run command with arguments, die on failure -}
@@ -47,13 +64,3 @@ run cmd args = do
   where
     cnf :: SomeException -> IO a
     cnf _ = die $ "Command not found: " ++ cmd
-
-
-
-{- monadic ternary conditional operator -}
-
-infix 1 ??
-(??) :: Monad m => m Bool -> m a -> m a -> m a
-(??) c t f = do
-  c' <- c
-  if c' then t else f
